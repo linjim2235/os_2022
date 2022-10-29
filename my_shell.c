@@ -9,6 +9,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+char **history;
+int cmd_num = 0;
 /*
   Function Declarations for builtin shell commands:
  */
@@ -16,6 +18,9 @@ int lsh_cd(char **args);
 int lsh_help(char **args);
 int lsh_exit(char **args);
 int lsh_echo(char **args);
+int lsh_record(char **args);
+int lsh_replay(char **args);
+int lsh_mypid(char **args);
 
 /*
   List of builtin commands, followed by their corresponding functions.
@@ -24,14 +29,20 @@ char *builtin_str[] = {
   "cd",
   "help",
   "exit",
-  "echo"
+  "echo",
+  "record",
+  "replay",
+  "mypid"
 };
 
 int (*builtin_func[]) (char **) = {
   &lsh_cd,
   &lsh_help,
   &lsh_exit,
-  &lsh_echo
+  &lsh_echo,
+  &lsh_record,
+  &lsh_replay,
+  &lsh_mypid
 };
 
 int lsh_num_builtins() {
@@ -48,7 +59,7 @@ int lsh_cd(char **args)
     fprintf(stderr, "lsh: expected argument to \"cd\"\n");
   }else {
     if (chdir(args[1]) != 0) {
-      perror("lsh");
+      perror("Error");
     }
   }
   return 1;
@@ -78,6 +89,62 @@ int lsh_exit(char **args)
   return 0;
 }
 
+int lsh_echo(char **args){
+  int i = 1;
+  if(strcmp(args[1], "-n") == 0){
+    if(args[i+1] != NULL){
+      printf("%s",args[i+1]);
+      i = i+2;
+        while(args[i] != NULL){
+          printf(" ");
+          printf("%s",args[i]);
+          i++;
+        }
+    }
+  }else{
+    if(args[i] != NULL){
+      printf("%s",args[i]);
+      i = i+1;
+        while(args[i] != NULL){
+          printf(" ");
+          printf("%s",args[i]);
+          i++;
+        }
+    }
+    printf("\n");
+  }
+  return 1;
+}
+
+int lsh_record(char **args){
+  if(cmd_num == 16){
+    for(int i = 0; i < 16; i++){
+        printf("%d: %s\n", i+1, history[i]);
+    }
+  }else{
+    for(int i = 0; i < cmd_num; i++){//cmd_num from 0 to count
+        printf("%d: %s\n", i+1, history[i]);
+      }
+  }
+  return 1;
+}
+
+int lsh_replay(char **args){
+  return 1;
+}
+int lsh_mypid(char **args){
+  if(strcmp(args[1], "-i") == 0){
+      pid_t pid = getpid();
+      printf("%d\n", pid);
+  }else if(strcmp(args[1], "-p") == 0){
+
+  }else if(strcmp(args[1], "-c") == 0){
+
+  }
+
+  return 1;
+}
+
 int lsh_launch(char **args)
 {
   pid_t pid;
@@ -87,12 +154,12 @@ int lsh_launch(char **args)
   if (pid == 0) {
     // Child process
     if (execvp(args[0], args) == -1) {
-      perror("lsh");
+      perror("Error");
     }
     exit(EXIT_FAILURE);
   } else if (pid < 0) {
     // Error forking
-    perror("lsh");
+    perror("Error");
   } else {
     // Parent process
     do {
@@ -138,10 +205,11 @@ char *lsh_read_line(void)
     if (feof(stdin)) {
       exit(EXIT_SUCCESS);  // We received an EOF
     } else  {
-      perror("lsh: getline\n");
+      perror("Error: getline\n");
       exit(EXIT_FAILURE);
     }
   }
+
   return line;
 }
 
@@ -200,9 +268,46 @@ void lsh_loop(void)
   do {
     printf(">>> $ ");
     line = lsh_read_line();
-    args = lsh_split_line(line);
-    status = lsh_execute(args);
+    if(strstr(line, "replay") == NULL){//////////////////////    record history
+      char* line1 = malloc(sizeof(line));
+      strcpy(line1, line);
+      line1[strlen(line1)-1] = NULL;// delete the "\n"
+      if(cmd_num == 16){
+        for(int i = 0 ; i < 15 ; i++){
+          history[i] = history[i+1];
+        }
+        history[15] = line1;
+        args = lsh_split_line(line);
+      }else{
+        history[cmd_num] = line1;
+        cmd_num++;
+        args = lsh_split_line(line);
+      }
 
+    }else{
+      args = lsh_split_line(line);
+      if(atoi(args[1]) > 0 && atoi(args[1]) < cmd_num){ //legal argument
+        char* line2 = malloc(16 * sizeof(char*));
+        char* line3 = malloc(16 * sizeof(char*));
+        strcpy(line2, history[(atoi(args[1])-1)]);
+        strcpy(line3, history[(atoi(args[1])-1)]);
+        if(cmd_num == 16){
+          for(int i = 0 ; i < 15 ; i++){
+            history[i] = history[i+1];
+          }
+          history[15] = line3;
+          args = lsh_split_line(line2);
+        }else{
+          history[cmd_num] = line3;
+          cmd_num++;
+          args = lsh_split_line(line2);
+        }
+      }else{
+        printf("replay: wrong args\n");
+      }
+    }
+
+    status = lsh_execute(args);
     free(line);
     free(args);
   } while (status);
@@ -212,11 +317,10 @@ void lsh_loop(void)
 int main(int argc, char **argv)
 {
   // Load config files, if any.
-
   // Run command loop.
+  history = malloc(128 * sizeof(char*));
   lsh_loop();
 
   // Perform any shutdown/cleanup.
-
   return EXIT_SUCCESS;
 }
