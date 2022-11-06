@@ -16,13 +16,13 @@ int cmd_num = 0;
 /*
   Function Declarations for builtin shell commands:
  */
-int lsh_cd(char **args);
-int lsh_help(char **args);
-int lsh_exit(char **args);
-int lsh_echo(char **args);
-int lsh_record(char **args);
-int lsh_replay(char **args);
-int lsh_mypid(char **args);
+int cd(char **args);
+int help(char **args);
+int shell_exit(char **args);
+int echo(char **args);
+int record(char **args);
+int replay(char **args);
+int mypid(char **args);
 
 /*
   List of builtin commands, followed by their corresponding functions.
@@ -37,15 +37,15 @@ char *builtin_str[] = {
     "mypid"};
 
 int (*builtin_func[])(char **) = {
-    &lsh_cd,
-    &lsh_help,
-    &lsh_exit,
-    &lsh_echo,
-    &lsh_record,
-    &lsh_replay,
-    &lsh_mypid};
+    &cd,
+    &help,
+    &shell_exit,
+    &echo,
+    &record,
+    &replay,
+    &mypid};
 
-int lsh_num_builtins()
+int num_builtins()
 {
   return sizeof(builtin_str) / sizeof(char *);
 }
@@ -54,7 +54,7 @@ int lsh_num_builtins()
   Builtin function implementations.
 */
 
-int lsh_cd(char **args)
+int cd(char **args)
 {
   if (args[1] == NULL)
   { // if second argument not exist
@@ -70,7 +70,7 @@ int lsh_cd(char **args)
   return 1;
 }
 
-int lsh_help(char **args)
+int help(char **args)
 {
   printf("----------------------------------------------------------------\n");
   printf("my little shell\n");
@@ -89,12 +89,12 @@ int lsh_help(char **args)
   return 1;
 }
 
-int lsh_exit(char **args)
+int shell_exit(char **args)
 {
   return 0;
 }
 
-int lsh_echo(char **args)
+int echo(char **args)
 {
   int i = 1;
   if (strcmp(args[1], "-n") == 0)
@@ -129,7 +129,7 @@ int lsh_echo(char **args)
   return 1;
 }
 
-int lsh_record(char **args)
+int record(char **args)
 {
   if (cmd_num == 16)
   {
@@ -148,7 +148,7 @@ int lsh_record(char **args)
   return 1;
 }
 
-int lsh_replay(char **args)
+int replay(char **args)
 {
   return 1;
 }
@@ -170,7 +170,7 @@ int visitDir(const char *addr, const char *args) // check in "/proc/"" have this
   }
 }
 
-void print_ppid(const char *args){
+void print_ppid(const char *args){//print process' parent's pid 
   FILE *file;
   char line[32];
   char path[32];
@@ -193,14 +193,14 @@ void print_ppid(const char *args){
   fclose(file);
 }
 
-void print_cpid(const char *args){//不會印出自己所在process那串的pid
+void print_cpid(const char *args){//print process' child's pid//不會印出自己所在process那串的pid
   char path[64];
   char *p;
   strcpy(path, "/proc/");
   strcat(path, args);
   strcat(path, "/task/");
-  strcat(path, args);
-  strcat(path, "/children");
+  // strcat(path, args);
+  // strcat(path, "/children");
   DIR *dir = opendir(path);
   if (dir != NULL)
   {
@@ -216,7 +216,7 @@ void print_cpid(const char *args){//不會印出自己所在process那串的pid
   }
 }
 
-int lsh_mypid(char **args)
+int mypid(char **args)
 {
   if (strcmp(args[1], "-i") == 0)
   {
@@ -247,7 +247,11 @@ int lsh_mypid(char **args)
   return 1;
 }
 
-int lsh_launch(char **args)
+void my_pipelines(char **args, int j){
+  
+}
+
+int launch(char **args)
 {
   pid_t pid;
   int status;
@@ -279,37 +283,42 @@ int lsh_launch(char **args)
   return 1;
 }
 
-/**
-   @brief Execute shell built-in or launch program.
-   @param args Null terminated list of arguments.
-   @return 1 if the shell should continue running, 0 if it should terminate
- */
-int lsh_execute(char **args)
+
+//brief: Execute shell built-in or launch program.
+//param: args Null terminated list of arguments.
+//return 1 if the shell should continue running, 0 if it should terminate
+int execute(char **args)
 {
   int i;
 
-  if (args[0] == NULL)
-  { // An empty command was entered.
+  if (args[0] == NULL){// An empty command was entered.
     return 1;
   }
 
-  for (i = 0; i < lsh_num_builtins(); i++)
-  {
-    if (strcmp(args[0], builtin_str[i]) == 0)
-    { // if have
-      return (*builtin_func[i])(args);
+  for(int j = 0; args[j] != NULL; j++){
+    if(strcmp(args[j], "|") == 0){
+      my_pipelines(args, j);
+    }else if(strcmp(args[j], ">") == 0){
+
+    }else if(strcmp(args[j], "<") == 0){
+      
+    }else if(strcmp(args[j], "&") == 0){
+      
+    }else{
+      for (i = 0; i < num_builtins(); i++){
+        if (strcmp(args[0], builtin_str[i]) == 0){ // if it is built-in command
+            return (*builtin_func[i])(args);
+          }
+      }
     }
   }
-
-  return lsh_launch(args);
+  return launch(args);
 }
 
-/**
-   @brief Read a line of input from stdin.
-   @return The line from stdin.
- */
-#define LSH_RL_BUFSIZE 1024
-char *lsh_read_line(void)
+#define RL_BUFSIZE 1024
+//brief: Read a line of input from stdin.
+//return: The line from stdin.
+char *read_line(void)
 {
   char *line = NULL;
   ssize_t bufsize = 0; // have getline allocate a buffer for us
@@ -329,26 +338,24 @@ char *lsh_read_line(void)
   return line;
 }
 
-#define LSH_TOK_BUFSIZE 64
-#define LSH_TOK_DELIM " \t\r\n\a"
-/**
-   @brief Split a line into tokens (very naively).
-   @param line The line.
-   @return Null-terminated array of tokens.
- */
-char **lsh_split_line(char *line)
+#define TOK_BUFSIZE 64
+#define TOK_DELIM " \t\r\n\a"
+//brief: Split a line into tokens (very naively).
+//param: line The line.
+//return: Null-terminated array of tokens.
+char **split_line(char *line)
 {
-  int bufsize = LSH_TOK_BUFSIZE, position = 0;
+  int bufsize = TOK_BUFSIZE, position = 0;
   char **tokens = malloc(bufsize * sizeof(char *));
   char *token, **tokens_backup;
 
   if (!tokens)
   {
-    fprintf(stderr, "lsh: allocation error\n");
+    fprintf(stderr, "Error: allocation error\n");
     exit(EXIT_FAILURE);
   }
 
-  token = strtok(line, LSH_TOK_DELIM);
+  token = strtok(line, TOK_DELIM);
   while (token != NULL)
   {
     tokens[position] = token;
@@ -356,24 +363,24 @@ char **lsh_split_line(char *line)
 
     if (position >= bufsize)
     {
-      bufsize += LSH_TOK_BUFSIZE;
+      bufsize += TOK_BUFSIZE;
       tokens_backup = tokens;
       tokens = realloc(tokens, bufsize * sizeof(char *));
       if (!tokens)
       {
         free(tokens_backup);
-        fprintf(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "Error: allocation error\n");
         exit(EXIT_FAILURE);
       }
     }
 
-    token = strtok(NULL, LSH_TOK_DELIM);
+    token = strtok(NULL, TOK_DELIM);
   }
   tokens[position] = NULL;
   return tokens;
 }
 
-void lsh_loop(void)
+void loop(void)
 {
   char *line;
   char **args;
@@ -387,7 +394,7 @@ void lsh_loop(void)
   do
   {
     printf(">>> $ ");
-    line = lsh_read_line();
+    line = read_line();
     if (strstr(line, "replay") == NULL)
     { //////////////////////    record history
       char *line1 = malloc(sizeof(line));
@@ -400,18 +407,18 @@ void lsh_loop(void)
           history[i] = history[i + 1];
         }
         history[15] = line1;
-        args = lsh_split_line(line);
+        args = split_line(line);
       }
       else
       {
         history[cmd_num] = line1;
         cmd_num++;
-        args = lsh_split_line(line);
+        args = split_line(line);
       }
     }
     else
     {
-      args = lsh_split_line(line);
+      args = split_line(line);
       if (atoi(args[1]) > 0 && atoi(args[1]) < cmd_num)
       { // legal argument
         char *line2 = malloc(16 * sizeof(char *));
@@ -425,13 +432,13 @@ void lsh_loop(void)
             history[i] = history[i + 1];
           }
           history[15] = line3;
-          args = lsh_split_line(line2);
+          args = split_line(line2);
         }
         else
         {
           history[cmd_num] = line3;
           cmd_num++;
-          args = lsh_split_line(line2);
+          args = split_line(line2);
         }
       }
       else
@@ -440,7 +447,7 @@ void lsh_loop(void)
       }
     }
 
-    status = lsh_execute(args);
+    status = execute(args);
     free(line);
     free(args);
   } while (status);
@@ -451,7 +458,7 @@ int main(int argc, char **argv)
   // Load config files, if any.
   // Run command loop.
   history = malloc(128 * sizeof(char *));
-  lsh_loop();
+  loop();
 
   // Perform any shutdown/cleanup.
   return EXIT_SUCCESS;
